@@ -10,111 +10,138 @@ namespace Essentials
 	public static class esUtils
 	{
 		/* Search IDs */
-		public static List<object> ItemIdSearch(string search)
+    public static Dictionary<string, int> ItemIdSearch(string search)  
 		{
 			try
 			{
-				var found = new List<object>();
+        var found = new Dictionary<string, int>();
 				for (int i = -48; i < Main.maxItemTypes; i++)
 				{
 					Item item = new Item();
 					item.netDefaults(i);
 					if (item.name.ToLower().Contains(search.ToLower()))
-						found.Add(item);
+						found.Add(item.name, item.netID);
 				}
 				return found;
 			}
-			catch { return new List<object>(); }
+      catch { return new Dictionary<string, int>(); }
 		}
-		public static List<object> NPCIdSearch(string search)
+    public static Dictionary<string, int> NPCIdSearch(string search)
 		{
 			try
 			{
-				var found = new List<object>();
+        var found = new Dictionary<string, int>();
 				for (int i = -65; i < Main.maxNPCTypes; i++)
 				{
 					NPC npc = new NPC();
 					npc.netDefaults(i);
 					if (npc.name.ToLower().Contains(search.ToLower()))
-						found.Add(npc);
+						found.Add(npc.name, npc.netID);
 				}
 				return found;
 			}
-			catch { return new List<object>(); }
+      catch { return new Dictionary<string, int>(); }
 		}
-		public static void DisplaySearchResults(TSPlayer Player, List<object> Results, int Page)
-		{
-			if (Results[0] is Item)
-				Player.SendInfoMessage("Item Search:");
-			else if (Results[0] is NPC)
-				Player.SendInfoMessage("NPC Search:");
-			var sb = new StringBuilder();
-			if (Results.Count > (8 * (Page - 1)))
-			{
-				for (int j = (8 * (Page - 1)); j < (8 * Page); j++)
-				{
-					if (sb.Length != 0)
-						sb.Append(" | ");
-					if (Results[j] is Item)
-						sb.Append(((Item)Results[j]).netID).Append(": ").Append(((Item)Results[j]).name);
-					else if (Results[j] is NPC)
-						sb.Append(((NPC)Results[j]).netID).Append(": ").Append(((NPC)Results[j]).name);
-					if (j == Results.Count - 1)
-					{
-						Player.SendSuccessMessage(sb.ToString());
-						break;
-					}
-					if ((j + 1) % 2 == 0)
-					{
-						Player.SendSuccessMessage(sb.ToString());
-						sb.Clear();
-					}
-				}
-			}
-			if (Results.Count > (8 * Page))
-			{
-				Player.SendInfoMessage("Type /spage {0} for more Results.", Page + 1);
-			}
-		}
+    public static Dictionary<string, int> TileIdSearch(string search) {
+      Dictionary<string, int> results = new Dictionary<string, int>();
 
-		/* Sethome - how many homes can a user set. */
-		public static int NoOfHomesCanSet(TSPlayer ply)
-		{
-			if (ply.Group.HasPermission("essentials.home.set.*"))
-				return -1;
+      foreach (var fi in typeof(Terraria.ID.TileID).GetFields()) {
+        var name = fi.Name;
+        var sb = new StringBuilder();
+        for (int i = 0; i < name.Length; i++) {
+          if (Char.IsUpper(name[i]))
+            sb.Append(" ").Append(Char.ToLower(name[i]));
+          else
+            sb.Append(name[i]);
+        }
 
-			List<int> maxHomes = new List<int>();
-			foreach (string p in ply.Group.TotalPermissions)
-			{
-				if (p.StartsWith("essentials.home.set.") && p != "essentials.home.set." && !ply.Group.negatedpermissions.Contains(p))
-				{
-					int m = 0;
-					if (int.TryParse(p.Remove(0, 20), out m))
-						maxHomes.Add(m);
-				}
-			}
+        if (sb.ToString(1, sb.Length - 1).ToLower().Contains(search.ToLower()))
+          results.Add(sb.ToString(1, sb.Length - 1), (ushort)fi.GetValue(null));
+      }
 
-			if (maxHomes.Count < 1)
-				return 1;
-			else
-				return maxHomes.Max();
-		}
+      return results;
+    }
+    public static Dictionary<string, int> WallIdSearch(string search) {
+      Dictionary<string, int> results = new Dictionary<string, int>();
 
-		/* Sethome - get next home */
-		public static string NextHome(List<string> homes)
-		{
-			List<int> intHomes = new List<int>();
-			foreach (string h in homes)
-			{
-				int m = 0;
-				if (int.TryParse(h, out m))
-					intHomes.Add(m);
-			}
-			if (intHomes.Count < 1)
-				return "1";
-			else
-				return (intHomes.Max() + 1).ToString();
-		}
+      foreach (var fi in typeof(Terraria.ID.WallID).GetFields()) {
+        var name = fi.Name;
+        var sb = new StringBuilder();
+        for (int i = 0; i < name.Length; i++) {
+          if (Char.IsUpper(name[i]))
+            sb.Append(" ").Append(Char.ToLower(name[i]));
+          else
+            sb.Append(name[i]);
+        }
+
+        if (sb.ToString(1, sb.Length - 1).ToLower().Contains(search.ToLower()))
+          results.Add(sb.ToString(1, sb.Length - 1), (ushort)fi.GetValue(null));
+      }
+
+      return results;
+    }
+
+    public static void DisplaySearchResults(TSPlayer Player, string type, Dictionary<string, int> Results, int Page) {
+      Player.SendInfoMessage(type + " Search:");
+      var sb = new StringBuilder();
+      if (Results.Count > (8 * (Page - 1))) {
+        for (int j = (8 * (Page - 1)); j < (8 * Page); j++) {
+          if (sb.Length != 0)
+            sb.Append(" | ");
+          sb.Append(Results.ElementAt(j).Key).Append(": ").Append(Results.ElementAt(j).Value);
+          if (j == Results.Count - 1) {
+            Player.SendSuccessMessage(sb.ToString());
+            break;
+          }
+          if ((j + 1) % 2 == 0) {
+            Player.SendSuccessMessage(sb.ToString());
+            sb.Clear();
+          }
+        }
+      }
+      if (Results.Count > (8 * Page)) {
+        Player.SendInfoMessage("Type /spage {0} for more Results.", Page + 1);
+      }
+    }
+
+    ///* Sethome - how many homes can a user set. */
+    //public static int NoOfHomesCanSet(TSPlayer ply)
+    //{
+    //  if (ply.Group.HasPermission("essentials.home.set.*"))
+    //    return -1;
+
+    //  List<int> maxHomes = new List<int>();
+    //  foreach (string p in ply.Group.TotalPermissions)
+    //  {
+    //    if (p.StartsWith("essentials.home.set.") && p != "essentials.home.set." && !ply.Group.negatedpermissions.Contains(p))
+    //    {
+    //      int m = 0;
+    //      if (int.TryParse(p.Remove(0, 20), out m))
+    //        maxHomes.Add(m);
+    //    }
+    //  }
+
+    //  if (maxHomes.Count < 1)
+    //    return 1;
+    //  else
+    //    return maxHomes.Max();
+    //}
+
+    ///* Sethome - get next home */
+    //public static string NextHome(List<string> homes)
+    //{
+    //  List<int> intHomes = new List<int>();
+    //  foreach (string h in homes)
+    //  {
+    //    int m = 0;
+    //    if (int.TryParse(h, out m))
+    //      intHomes.Add(m);
+    //  }
+    //  if (intHomes.Count < 1)
+    //    return "1";
+    //  else
+    //    return (intHomes.Max() + 1).ToString();
+    //}
 
 		/* Top, Up and Down Methods */
 		public static int GetTop(int TileX)
