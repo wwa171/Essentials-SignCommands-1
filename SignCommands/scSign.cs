@@ -29,7 +29,6 @@ namespace SignCommands {
       cooldown = 0;
       _cooldownGroup = string.Empty;
       RegisterCommands(text, registrar);
-      silent = false;
     }
 
     #region ParseCommands
@@ -49,7 +48,7 @@ namespace SignCommands {
 
       //Split the text string at any TShock command character
       var cmdStrings = text.Split(Convert.ToChar(TShock.Config.CommandSpecifier));
-
+      
       //Iterate through the strings
       foreach (var str in cmdStrings) {
         var sbList = new List<string>();
@@ -230,9 +229,8 @@ namespace SignCommands {
 
       if (_bosses.Count > 0)
         SpawnBosses(_bosses, sPly);
-
+      
       foreach (var cmdPair in commands) {
-        //var args = new List<string>(cmdPair.Key);
         var cmd = cmdPair.Value;
         var cmdText = string.Join(" ", cmdPair.Key);
         cmdText = cmdText.Replace("{player}", sPly.TsPlayer.Name);
@@ -240,15 +238,14 @@ namespace SignCommands {
         var args = cmdText.Split(' ').ToList();
 
 
-        //while (args.Any(s => s.Contains("{player}")))
-        //	args[args.IndexOf("{player}")] = sPly.TsPlayer.Name;
-        
-        if (!silent)
-          TShock.Utils.SendLogs(
-              string.Format("{0} executed: {1}{2} [Via sign command].", sPly.TsPlayer.Name,
-                  TShock.Config.CommandSpecifier,
-                  cmdText), Color.PaleVioletRed, sPly.TsPlayer);
+        string log = string.Format("{0} executed: {1}{2} [Via sign command].", 
+          sPly.TsPlayer.Name, TShock.Config.CommandSpecifier, cmdText);
 
+        if (!silent) 
+          TShock.Utils.SendLogs(log, Color.PaleVioletRed, sPly.TsPlayer);
+        else
+          TShock.Log.Info(log);
+          
         args.RemoveAt(0);
 
         cmd.CommandDelegate.Invoke(new CommandArgs(cmdText, silent, sPly.TsPlayer, args));
@@ -428,11 +425,15 @@ namespace SignCommands {
 
       TSPlayer.All.SendSuccessMessage("{0} has spawned {1}", sPly.TsPlayer.Name, string.Join(", ", mobList));
 
-      if (!silent)
-        TShock.Utils.SendLogs(
-                   string.Format("{0} executed: {1}{2} [Via sign command].", sPly.TsPlayer.Name,
-                       TShock.Config.CommandSpecifier,
-                       "/spawnmob " + string.Join(", ", mobList)), Color.PaleVioletRed, sPly.TsPlayer);
+      string log = string.Format("{0} executed: {1}{2} [Via sign command].", 
+        sPly.TsPlayer.Name, TShock.Config.CommandSpecifier, "/spawnmob " + string.Join(", ", mobList));
+
+      if (!silent) {
+        TShock.Utils.SendLogs(log, Color.PaleVioletRed, sPly.TsPlayer);
+      }
+      else {
+        TShock.Log.Info(log);
+      }
     }
 
     private void SpawnBosses(Dictionary<string, int> bosses, ScPlayer sPly) {
@@ -543,11 +544,13 @@ namespace SignCommands {
 
       TSPlayer.All.SendSuccessMessage("{0} has spawned {1}", sPly.TsPlayer.Name, string.Join(", ", bossList));
 
+      string log = string.Format("{0} executed: {1}{2} [Via sign command].",
+        sPly.TsPlayer.Name, TShock.Config.CommandSpecifier, "/spawnboss " + string.Join(", ", bossList));
+
       if (!silent)
-        TShock.Utils.SendLogs(
-                    string.Format("{0} executed: {1}{2} [Via sign command].", sPly.TsPlayer.Name,
-                        TShock.Config.CommandSpecifier,
-                        "/spawnboss " + string.Join(", ", bossList)), Color.PaleVioletRed, sPly.TsPlayer);
+        TShock.Utils.SendLogs(log, Color.PaleVioletRed, sPly.TsPlayer);
+      else
+        TShock.Log.Info(log);
     }
   }
 }

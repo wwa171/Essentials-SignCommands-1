@@ -42,6 +42,7 @@ namespace SignCommands {
 
     public override void Initialize() {
       ServerApi.Hooks.GameInitialize.Register(this, OnInitialize);
+      ServerApi.Hooks.NetGetData.Register(this, OnGetData);
       ServerApi.Hooks.ServerJoin.Register(this, OnJoin);
       ServerApi.Hooks.ServerLeave.Register(this, OnLeave);
     }
@@ -49,6 +50,7 @@ namespace SignCommands {
     protected override void Dispose(bool disposing) {
       if (disposing) {
         ServerApi.Hooks.GameInitialize.Deregister(this, OnInitialize);
+        ServerApi.Hooks.NetGetData.Deregister(this, OnGetData);
         ServerApi.Hooks.ServerJoin.Deregister(this, OnJoin);
         ServerApi.Hooks.ServerLeave.Deregister(this, OnLeave);
       }
