@@ -12,8 +12,6 @@ namespace SignCommands {
     private string _cooldownGroup;
     private readonly List<string> _groups = new List<string>();
     private readonly List<string> _users = new List<string>();
-    private readonly Dictionary<string, int> _bosses = new Dictionary<string, int>();
-    private readonly Dictionary<string, int> _mobs = new Dictionary<string, int>();
     public readonly Dictionary<List<string>, SignCommand> commands = new Dictionary<List<string>, SignCommand>();
     public bool freeAccess;
     public bool noEdit;
@@ -150,22 +148,6 @@ namespace SignCommands {
             }
             ParseUsers(args);
             continue;
-          case "spawnmob":
-          case "sm":
-            if (!ply.Group.HasPermission(Permissions.spawnmob)) {
-              ply.SendErrorMessage("You do not have permission to create that sign command.");
-              continue;
-            }
-            ParseSpawnMob(args, ply);
-            continue;
-          case "spawnboss":
-          case "sb":
-            if (!ply.Group.HasPermission(Permissions.spawnboss)) {
-              ply.SendErrorMessage("You do not have permission to create that sign command.");
-              continue;
-            }
-            ParseSpawnBoss(args, ply);
-            continue;
         }
 
         IEnumerable<Command> cmds = Commands.ChatCommands.Where(c => c.HasAlias(cmdName)).ToList();
@@ -223,12 +205,6 @@ namespace SignCommands {
         }
         return;
       }
-
-      if (_mobs.Count > 0)
-        SpawnMobs(_mobs, sPly);
-
-      if (_bosses.Count > 0)
-        SpawnBosses(_bosses, sPly);
       
       foreach (var cmdPair in commands) {
         var cmd = cmdPair.Value;
@@ -285,21 +261,6 @@ namespace SignCommands {
           return false;
         }
 
-      if (_mobs.Count > 0 && !player.Group.HasPermission(Permissions.spawnmob)) {
-        if (sPly.AlertPermissionCooldown == 0) {
-          player.SendErrorMessage("You do not have the required permission to use this sign.");
-          sPly.AlertPermissionCooldown = 3;
-        }
-        return false;
-      }
-      if (_bosses.Count > 0 && !player.Group.HasPermission(Permissions.spawnboss)) {
-        if (sPly.AlertPermissionCooldown == 0) {
-          player.SendErrorMessage("You do not have the required permission to use this sign.");
-          sPly.AlertPermissionCooldown = 3;
-        }
-        return false;
-      }
-
       if (commands.Values.All(command => command.CanRun(player)))
         return true;
 
@@ -311,47 +272,6 @@ namespace SignCommands {
     }
 
     #endregion
-
-    private void ParseSpawnMob(IEnumerable<string> args, TSPlayer player) {
-      //>sm "blue slime":10 zombie:100
-      var list = new List<string>(args);
-      list.RemoveAt(0);
-      foreach (var obj in list) {
-        try {
-          var mob = obj.Split(':')[0];
-          var num = obj.Split(':')[1];
-
-          int spawnCount;
-          if (!int.TryParse(num, out spawnCount))
-            continue;
-
-          _mobs.Add(mob, spawnCount);
-        }
-        catch {
-          player.SendErrorMessage("Invalid naming format. Format: \"mobname:spawncount\"");
-        }
-      }
-    }
-
-    private void ParseSpawnBoss(IEnumerable<string> args, TSPlayer player) {
-      var list = new List<string>(args);
-      list.RemoveAt(0);
-      foreach (var obj in list) {
-        try {
-          var boss = obj.Split(':')[0];
-          var num = obj.Split(':')[1];
-
-          int spawnCount;
-          if (!int.TryParse(num, out spawnCount))
-            continue;
-
-          _bosses.Add(boss, spawnCount);
-        }
-        catch {
-          player.SendErrorMessage("Invalid naming format. Format: \"bossname:spawncount\"");
-        }
-      }
-    }
 
     private void ParseSignCd(IList<string> args) {
       int cd;
@@ -395,162 +315,6 @@ namespace SignCommands {
 
       foreach (var user in users)
         _users.Add(user);
-    }
-
-    private void SpawnMobs(Dictionary<string, int> mobs, ScPlayer sPly) {
-      var mobList = new List<string>();
-      foreach (var pair in mobs) {
-        var amount = Math.Min(pair.Value, Main.maxNPCs);
-
-        var npcs = TShock.Utils.GetNPCByIdOrName(pair.Key);
-        if (npcs.Count == 0)
-          continue;
-
-        if (npcs.Count > 1)
-          continue;
-
-        var npc = npcs[0];
-        if (npc.type >= 1 && npc.type < Main.maxNPCTypes && npc.type != 113) {
-          TSPlayer.Server.SpawnNPC(npc.type, npc.name, amount, _point.X, _point.Y, 50,
-              20);
-          mobList.Add(npc.name + " (" + amount + ")");
-        }
-        else if (npc.type == 113) {
-          if (Main.wof >= 0 || (_point.Y / 16f < (Main.maxTilesY - 205)))
-            continue;
-          NPC.SpawnWOF(new Vector2(_point.X, _point.Y));
-          mobList.Add("the Wall of Flesh (" + amount + ")");
-        }
-      }
-
-      TSPlayer.All.SendSuccessMessage("{0} has spawned {1}", sPly.TsPlayer.Name, string.Join(", ", mobList));
-
-      string log = string.Format("{0} executed: {1}{2} [Via sign command].", 
-        sPly.TsPlayer.Name, TShock.Config.CommandSpecifier, "/spawnmob " + string.Join(", ", mobList));
-
-      if (!silent) {
-        TShock.Utils.SendLogs(log, Color.PaleVioletRed, sPly.TsPlayer);
-      }
-      else {
-        TShock.Log.Info(log);
-      }
-    }
-
-    private void SpawnBosses(Dictionary<string, int> bosses, ScPlayer sPly) {
-      var bossList = new List<string>();
-      foreach (var pair in bosses) {
-        var npc = new NPC();
-        switch (pair.Key.ToLower()) {
-          case "*":
-          case "all":
-            int[] npcIds = { 4, 13, 35, 50, 125, 126, 127, 134, 222, 245, 262, 266, 370 };
-            TSPlayer.Server.SetTime(false, 0.0);
-            foreach (var i in npcIds) {
-              npc.SetDefaults(i);
-              TSPlayer.Server.SpawnNPC(npc.type, npc.name, pair.Value, _point.X, _point.Y);
-            }
-
-            bossList.Add("all bosses (" + pair.Value + ")");
-            break;
-          case "brain":
-          case "brain of cthulhu":
-            npc.SetDefaults(266);
-            TSPlayer.Server.SpawnNPC(npc.type, npc.name, pair.Value, _point.X, _point.Y);
-            bossList.Add(npc.name + " (" + pair.Value + ")");
-            break;
-          case "destroyer":
-            npc.SetDefaults(134);
-            TSPlayer.Server.SetTime(false, 0.0);
-            TSPlayer.Server.SpawnNPC(npc.type, npc.name, pair.Value, _point.X, _point.Y);
-            bossList.Add(npc.name + " (" + pair.Value + ")");
-            break;
-          case "duke":
-          case "duke fishron":
-          case "fishron":
-            npc.SetDefaults(370);
-            TSPlayer.Server.SpawnNPC(npc.type, npc.name, pair.Value, _point.X, _point.Y);
-            bossList.Add(npc.name + " (" + pair.Value + ")");
-            break;
-          case "eater":
-          case "eater of worlds":
-            npc.SetDefaults(13);
-            TSPlayer.Server.SpawnNPC(npc.type, npc.name, pair.Value, _point.X, _point.Y);
-            bossList.Add(npc.name + " (" + pair.Value + ")");
-            break;
-          case "eye":
-          case "eye of cthulhu":
-            npc.SetDefaults(4);
-            TSPlayer.Server.SetTime(false, 0.0);
-            TSPlayer.Server.SpawnNPC(npc.type, npc.name, pair.Value, _point.X, _point.Y);
-            bossList.Add(npc.name + " (" + pair.Value + ")");
-            break;
-          case "golem":
-            npc.SetDefaults(245);
-            TSPlayer.Server.SetTime(false, 0.0);
-            TSPlayer.Server.SpawnNPC(npc.type, npc.name, pair.Value, _point.X, _point.Y);
-            bossList.Add(npc.name + " (" + pair.Value + ")");
-            break;
-          case "king":
-          case "king slime":
-            npc.SetDefaults(50);
-            TSPlayer.Server.SpawnNPC(npc.type, npc.name, pair.Value, _point.X, _point.Y);
-            bossList.Add(npc.name + " (" + pair.Value + ")");
-            break;
-          case "plantera":
-            npc.SetDefaults(262);
-            TSPlayer.Server.SpawnNPC(npc.type, npc.name, pair.Value, _point.X, _point.Y);
-            bossList.Add(npc.name + " (" + pair.Value + ")");
-            break;
-          case "prime":
-          case "skeletron prime":
-            npc.SetDefaults(127);
-            TSPlayer.Server.SetTime(false, 0.0);
-            TSPlayer.Server.SpawnNPC(npc.type, npc.name, pair.Value, _point.X, _point.Y);
-            bossList.Add(npc.name + " (" + pair.Value + ")");
-            break;
-          case "queen":
-          case "queen bee":
-            npc.SetDefaults(222);
-            TSPlayer.Server.SetTime(false, 0.0);
-            TSPlayer.Server.SpawnNPC(npc.type, npc.name, pair.Value, _point.X, _point.Y);
-            bossList.Add(npc.name + " (" + pair.Value + ")");
-            break;
-          case "skeletron":
-            npc.SetDefaults(35);
-            TSPlayer.Server.SetTime(false, 0.0);
-            TSPlayer.Server.SpawnNPC(npc.type, npc.name, pair.Value, _point.X, _point.Y);
-            bossList.Add(npc.name + " (" + pair.Value + ")");
-            break;
-          case "twins":
-            TSPlayer.Server.SetTime(false, 0.0);
-            npc.SetDefaults(125);
-            TSPlayer.Server.SpawnNPC(npc.type, npc.name, pair.Value, _point.X, _point.Y);
-            npc.SetDefaults(126);
-            TSPlayer.Server.SpawnNPC(npc.type, npc.name, pair.Value, _point.X, _point.Y);
-            bossList.Add("the Twins (" + pair.Value + ")");
-            break;
-          case "wof":
-          case "wall of flesh":
-            if (Main.wof >= 0)
-              return;
-            if (_point.Y / 16f < Main.maxTilesY - 205)
-              break;
-            NPC.SpawnWOF(new Vector2(_point.X, _point.Y));
-            bossList.Add("the Wall of Flesh (" + pair.Value + ")");
-            break;
-        }
-      }
-
-
-      TSPlayer.All.SendSuccessMessage("{0} has spawned {1}", sPly.TsPlayer.Name, string.Join(", ", bossList));
-
-      string log = string.Format("{0} executed: {1}{2} [Via sign command].",
-        sPly.TsPlayer.Name, TShock.Config.CommandSpecifier, "/spawnboss " + string.Join(", ", bossList));
-
-      if (!silent)
-        TShock.Utils.SendLogs(log, Color.PaleVioletRed, sPly.TsPlayer);
-      else
-        TShock.Log.Info(log);
     }
   }
 }
