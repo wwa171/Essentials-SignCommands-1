@@ -173,13 +173,15 @@ namespace SignCommands {
         return;
 
       if (cooldown > 0) {
-        if (sPly.AlertCooldownCooldown == 0) {
-          sPly.TsPlayer.SendErrorMessage("This sign is still cooling down. Please wait {0} more second{1}",
-            cooldown, cooldown.Suffix());
-          sPly.AlertCooldownCooldown = 3;
-        }
+        if (!sPly.TsPlayer.Group.HasPermission("essentials.signs.nocd")) {
+          if (sPly.AlertCooldownCooldown == 0) {
+            sPly.TsPlayer.SendErrorMessage("This sign is still cooling down. Please wait {0} more second{1}",
+              cooldown, cooldown.Suffix());
+            sPly.AlertCooldownCooldown = 3;
+          }
 
-        return;
+          return;
+        }
       }
 
       if (_confirm && sPly.confirmSign != this) {
