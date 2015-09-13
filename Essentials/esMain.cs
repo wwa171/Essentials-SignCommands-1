@@ -10,7 +10,7 @@ using TShockAPI;
 using TShockAPI.Hooks;
 
 namespace Essentials {
-  [ApiVersion(1, 21)]
+  [ApiVersion(1, 22)]
   public class Essentials : TerrariaPlugin {
     public override string Name { get { return "Essentials"; } }
     public override string Author { get { return "Scavenger"; } }
