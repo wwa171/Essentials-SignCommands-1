@@ -6,48 +6,35 @@ namespace SignCommands
 {
     public static class ScUtils
     {
-		/// <summary>
-		/// Check if the player can create a sign.
-		/// The player must have the ability to use every command they put on the sign.
-		/// </summary>
-		/// <param name="player">Player to check permissions with</param>
-		/// <param name="sign">Sign</param>
-		/// <returns></returns>
-        public static bool CanCreate(TSPlayer player, ScSign sign)
-        {
-			if (sign.commands.Count == 0) return true;
+		  /// <summary>
+		  /// Check if the player can create a sign.
+		  /// </summary>
+		  /// <param name="player">Player to check permissions with</param>
+		  /// <returns></returns>
+      public static bool CanCreate(TSPlayer player)
+      {
+        return player.Group.HasPermission("essentials.signs.create");
+      }
 
-            var fails = sign.commands.Count(cmd => !cmd.Value.CanRun(player));
+		  public static bool CanEdit(TSPlayer player, ScSign sign)
+		  {
+			  return !sign.noEdit || player.Group.HasPermission("essentials.signs.editall");
+		  }
 
-            return fails != sign.commands.Values.Count;
-        }
+		  public static bool CanRead(TSPlayer player, ScSign sign)
+		  {
+			  return !sign.noRead || player.Group.HasPermission("essentials.signs.readall");
+		  }
 
-		public static bool CanEdit(TSPlayer player, ScSign sign)
-		{
-			return !sign.noEdit || player.Group.HasPermission("essentials.signs.editall");
-		}
-
-		public static bool CanRead(TSPlayer player, ScSign sign)
-		{
-			return !sign.noRead || player.Group.HasPermission("essentials.signs.readall");
-		}
-
-		/// <summary>
-		/// Check if the player can break a sign.
-		/// If the player has the sign's override permission they can break it.
-		/// If the player has the permission "essentials.signs.break" they can break it
-		/// </summary>
-		/// <param name="player"></param>
-		/// <param name="sign"></param>
-		/// <returns></returns>
-        public static bool CanBreak(TSPlayer player, ScSign sign)
-        {
-            if (player.Group.HasPermission(sign.requiredPermission))
-                return true;
-            if (!player.Group.HasPermission("essentials.signs.break"))
-                return false;
-            return true;
-        }
+		  /// <summary>
+		  /// Check if the player can break a sign.
+		  /// If the player has the permission "essentials.signs.break" they can break it
+		  /// </summary>
+		  /// <param name="player"></param>
+		  /// <returns></returns>
+      public static bool CanBreak(TSPlayer player) {
+        return player.Group.HasPermission("essentials.signs.break");
+      }
     }
 
     public static class Extensions
@@ -83,7 +70,8 @@ namespace SignCommands
             var point = new Point(x, y);
             if (!dictionary.ContainsKey(point))
             {
-                var sign = new ScSign(text, tPly, point);
+                // not checking permissions when a sign is re-registered (after a server restart for example)
+                var sign = new ScSign(text, tPly, point, checkPermissions: false);
                 dictionary.Add(point, sign);
                 return sign;
             }

@@ -2,30 +2,22 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Timers;
 using Terraria;
 using TerrariaApi.Server;
 using TShockAPI;
+using Timer = System.Timers.Timer;
 
 namespace SignCommands {
   //TODO: Add infinite signs support & Global cooldowns
-  [ApiVersion(1, 22)]
+  [ApiVersion(1, 26)]
   public class SignCommands : TerrariaPlugin {
-    public override string Name {
-      get { return "Sign Commands"; }
-    }
-
-    public override string Author {
-      get { return "Scavenger"; }
-    }
-
-    public override string Description {
-      get { return "Put commands on signs!"; }
-    }
-
-    public override Version Version {
-      get { return new Version(1, 6, 0); }
-    }
+    public override string Name => "Sign Commands";
+    public override string Author => "Scavenger";
+    public override string Description => "Put commands on signs!";
+    public override Version Version => new Version(1, 6, 0);
 
     public static ScConfig config = new ScConfig();
     public static readonly ScPlayer[] ScPlayers = new ScPlayer[256];
@@ -135,32 +127,53 @@ namespace SignCommands {
 
     #region OnSignNew
 
-    private static bool OnSignNew(int x, int y, string text, int who) {
-      if (!text.ToLower().StartsWith(config.DefineSignCommands.ToLower())) return false;
+    private static bool OnSignNew(int x, int y, string text, int who, int signIndex) {
+      if (!text.StartsWith(config.DefineSignCommands, StringComparison.CurrentCultureIgnoreCase))
+        return false;
 
       var tPly = TShock.Players[who];
+      var sPly = ScPlayers[who];
       var point = new Point(x, y);
-      var sign = new ScSign(text, tPly, point);
-      if (tPly == null)
+
+      if (tPly == null || sPly == null)
         return false;
 
-      if (!ScUtils.CanEdit(tPly, sign))
+      if (!ScUtils.CanCreate(tPly)) {
+        SendErrorToPlayer(sPly, tPly, "You do not have the permission to create a Sign Commands sign.");
         return true;
-
-      if (ScUtils.CanCreate(tPly, sign)) {
-        ScSigns.AddItem(point, sign);
-        return false;
       }
 
-      tPly.SendErrorMessage("You do not have permission to create that sign command.");
-      return true;
+      ScSign sign;
+      try {
+        sign = new ScSign(text, tPly, point);
+      } catch (Exception ex) {
+        SendErrorToPlayer(sPly, tPly, ex.Message);
+        return true;
+      }
+
+      if (!ScUtils.CanEdit(tPly, sign)) {
+        SendErrorToPlayer(sPly, tPly, "This sign is protected from modifications.");
+        return true;
+      }
+
+      Task.Factory.StartNew(() => {
+        Thread.Sleep(10);
+
+        // actually register the new command sign only, if the player had the permission to change the sign text.
+        // This ensures that tshock (by regions) and other plugins protecting this sign have a chance to prevent the change.
+        string newText = Main.sign[signIndex].text;
+        bool textWasApplied = (newText == text);
+        if (textWasApplied)
+          ScSigns.AddItem(point, sign);
+      });
+      return false;
     }
 
     #endregion
 
     #region OnSignHit
 
-    private static bool OnSignHit(int x, int y, string text, int who) {
+    public static bool OnSignHit(int x, int y, string text, int who) {
       if (!text.ToLower().StartsWith(config.DefineSignCommands.ToLower())) return false;
       var tPly = TShock.Players[who];
       var sPly = ScPlayers[who];
@@ -168,7 +181,7 @@ namespace SignCommands {
 
       if (tPly == null || sPly == null) return false;
 
-      var canBreak = ScUtils.CanBreak(tPly, sign);
+      var canBreak = ScUtils.CanBreak(tPly);
       if (sPly.DestroyMode && canBreak) return false;
 
       if (config.ShowDestroyMessage && canBreak && sPly.AlertDestroyCooldown == 0) {
@@ -176,9 +189,11 @@ namespace SignCommands {
         sPly.AlertDestroyCooldown = 10;
       }
 
-      if (!sign.CheckPermissions(tPly)) return true;
-
-      sign.ExecuteCommands(sPly);
+      try {
+        sign.ExecuteCommands(sPly);
+      } catch (Exception ex) {
+        SendErrorToPlayer(sPly, tPly, ex.Message);
+      }
 
       return true;
     }
@@ -195,18 +210,17 @@ namespace SignCommands {
       if (sPly == null || tPly == null) return false;
       var sign = ScSigns.Check(x, y, text, sPly.TsPlayer);
 
-      if (sPly == null)
-        return false;
-
-      if (sPly.DestroyMode && ScUtils.CanBreak(sPly.TsPlayer, sign)) {
+      if (sPly.DestroyMode && ScUtils.CanBreak(sPly.TsPlayer)) {
         sPly.DestroyMode = false;
         //Cooldown removal
         return false;
       }
 
-      if (!sign.CheckPermissions(tPly)) return true;
-
-      sign.ExecuteCommands(sPly);
+      try {
+        sign.ExecuteCommands(sPly);
+      } catch (Exception ex) {
+        SendErrorToPlayer(sPly, tPly, ex.Message);
+      }
       return true;
     }
 
@@ -242,15 +256,14 @@ namespace SignCommands {
               reader.ReadInt16();
               var x = reader.ReadInt16();
               var y = reader.ReadInt16();
-              var text = reader.ReadString();
+              var newText = reader.ReadString();
               var id = Sign.ReadSign(x, y);
               if (id < 0 || Main.sign[id] == null) return;
               x = (short)Main.sign[id].x;
               y = (short)Main.sign[id].y;
-              if (OnSignNew(x, y, text, e.Msg.whoAmI)) {
+              if (OnSignNew(x, y, newText, e.Msg.whoAmI, id)) {
                 e.Handled = true;
                 TShock.Players[e.Msg.whoAmI].SendData(PacketTypes.SignNew, "", id);
-                TShock.Players[e.Msg.whoAmI].SendErrorMessage("This sign is protected from modifications.");
               }
             }
             break;
@@ -295,8 +308,10 @@ namespace SignCommands {
               bool handle;
               if (action == 0 && type == 0)
                 handle = OnSignKill(x, y, text, e.Msg.whoAmI);
-              else
+              else if (action == 0)
                 handle = OnSignHit(x, y, text, e.Msg.whoAmI);
+              else
+                handle = false;
 
               if (handle) {
                 e.Handled = true;
@@ -310,6 +325,13 @@ namespace SignCommands {
     }
 
     #endregion
+
+    private static void SendErrorToPlayer(ScPlayer sPly, TSPlayer tPly, string message) {
+      if (sPly.AlertPermissionCooldown == 0) {
+        tPly.SendErrorMessage(message);
+        sPly.AlertPermissionCooldown = 3;
+      }
+    }
   }
 
   public class Cooldown {

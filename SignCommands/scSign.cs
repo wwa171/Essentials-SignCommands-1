@@ -16,17 +16,15 @@ namespace SignCommands {
     public bool freeAccess;
     public bool noEdit;
     public bool noRead;
-    private bool _confirm;
-    private Point _point;
+    private bool confirm;
     private bool silent;
 
     public string requiredPermission = string.Empty;
 
-    public ScSign(string text, TSPlayer registrar, Point point) {
-      _point = point;
+    public ScSign(string text, TSPlayer registrar, Point point, bool checkPermissions = true) {
       cooldown = 0;
       _cooldownGroup = string.Empty;
-      RegisterCommands(text, registrar);
+      RegisterCommands(text, registrar, checkPermissions);
     }
 
     #region ParseCommands
@@ -96,7 +94,7 @@ namespace SignCommands {
 
     #region RegisterCommands
 
-    private void RegisterCommands(string text, TSPlayer ply) {
+    private void RegisterCommands(string text, TSPlayer ply, bool checkPermissions) {
       var cmdList = ParseCommands(text);
 
       foreach (var cmdArgs in cmdList) {
@@ -108,14 +106,13 @@ namespace SignCommands {
         
         switch (cmdName) {
           case "no-perm":
-            if (!ply.Group.HasPermission("essentials.signs.negateperms")) {
-              ply.SendErrorMessage("You do not have permission to create that sign command.");
-              continue;
-            }
+            if (checkPermissions && !ply.Group.HasPermission("essentials.signs.negateperms"))
+              throw new UnauthorizedAccessException("You do not have permission to use \"no-perm\" on a sign.");
+
             freeAccess = true;
             continue;
           case "confirm":
-            _confirm = true;
+            confirm = true;
             continue;
           case "no-read":
             noRead = true;
@@ -135,31 +132,29 @@ namespace SignCommands {
             ParseSignCd(args);
             continue;
           case "allowg":
-            if (!ply.Group.HasPermission("essentials.signs.allowgroups")) {
-              ply.SendErrorMessage("You do not have permission to create that sign command.");
-              continue;
-            }
+            if (checkPermissions && !ply.Group.HasPermission("essentials.signs.allowgroups"))
+              throw new UnauthorizedAccessException("You do not have permission to use \"allowg\" on a sign.");
+
             ParseGroups(args);
             continue;
           case "allowu":
-            if (!ply.Group.HasPermission("essentials.signs.allowusers")) {
-              ply.SendErrorMessage("You do not have permission to create that sign command.");
-              continue;
-            }
+            if (checkPermissions && !ply.Group.HasPermission("essentials.signs.allowusers"))
+              throw new UnauthorizedAccessException("You do not have permission to use \"allowu\" on a sign.");
+
             ParseUsers(args);
             continue;
         }
 
-        IEnumerable<Command> cmds = Commands.ChatCommands.Where(c => c.HasAlias(cmdName)).ToList();
+        IEnumerable<Command> cmds = Commands.ChatCommands.Where(c => c.HasAlias(cmdName));
 
         foreach (var cmd in cmds) {
-          if (!CheckPermissions(ply))
-            return;
-
           var sCmd = new SignCommand(cooldown, cmd.Permissions, cmd.CommandDelegate, cmdName);
           commands.Add(args, sCmd);
         }
       }
+
+      if (checkPermissions)
+        CheckCommandPermissions(ply);
     }
 
     #endregion
@@ -167,11 +162,8 @@ namespace SignCommands {
     #region ExecuteCommands
 
     public void ExecuteCommands(ScPlayer sPly) {
-      var hasPerm = CheckPermissions(sPly.TsPlayer);
-
-      if (!hasPerm)
-        return;
-
+      CheckPermissions(sPly.TsPlayer);
+      
       if (cooldown > 0) {
         if (!sPly.TsPlayer.Group.HasPermission("essentials.signs.nocd")) {
           if (sPly.AlertCooldownCooldown == 0) {
@@ -184,7 +176,7 @@ namespace SignCommands {
         }
       }
 
-      if (_confirm && sPly.confirmSign != this) {
+      if (confirm && sPly.confirmSign != this) {
         sPly.confirmSign = this;
         sPly.TsPlayer.SendWarningMessage("Are you sure you want to execute this sign command?");
         sPly.TsPlayer.SendWarningMessage("Hit the sign again to confirm.");
@@ -236,41 +228,29 @@ namespace SignCommands {
 
     #endregion
 
-    #region CheckPermissions
+    #region CheckPermissions, CheckCommandPermissions
 
-    public bool CheckPermissions(TSPlayer player) {
-      if (player == null) return false;
+    public void CheckPermissions(TSPlayer player) {
+      if (player == null)
+        throw new ArgumentNullException("player");
 
       var sPly = SignCommands.ScPlayers[player.Index];
       if (sPly == null) {
-        TShock.Log.ConsoleError("An error occured while executing a sign command."
-                         + "TSPlayer {0} at index {1} does not exist as an ScPlayer",
-            player.Name, player.Index);
-        player.SendErrorMessage("An error occured. Please try again");
-        return false;
+        TShock.Log.ConsoleError("An error occured while executing a sign command. TSPlayer {0} at index {1} does not exist as an ScPlayer", player.Name, player.Index);
+        throw new InvalidOperationException("An error occured. Please try again");
       }
 
-      if (freeAccess) return true;
+      if (!string.IsNullOrEmpty(requiredPermission) && !player.Group.HasPermission(requiredPermission))
+        throw new AccessViolationException("You do not have the required permission to use this sign.");
 
-      if (!string.IsNullOrEmpty(requiredPermission))
-        if (player.Group.HasPermission(requiredPermission))
-          return true;
-        else {
-          if (sPly.AlertPermissionCooldown == 0) {
-            player.SendErrorMessage("You do not have the required permission to use this sign.");
-            sPly.AlertPermissionCooldown = 3;
-          }
-          return false;
-        }
+      if (!freeAccess)
+        CheckCommandPermissions(player);
+    }
 
-      if (commands.Values.All(command => command.CanRun(player)))
-        return true;
-
-      if (sPly.AlertPermissionCooldown == 0) {
-        player.SendErrorMessage("You do not have access to the commands on this sign.");
-        sPly.AlertPermissionCooldown = 3;
+    private void CheckCommandPermissions(TSPlayer player) {
+      if (!this.commands.Values.All(command => command.CanRun(player))) {
+        throw new AccessViolationException("You do not have access to at least one of the commands on this sign.");
       }
-      return false;
     }
 
     #endregion
