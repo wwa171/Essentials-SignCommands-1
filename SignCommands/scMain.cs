@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
+using Microsoft.Xna.Framework;
 using Terraria;
 using TerrariaApi.Server;
 using TShockAPI;
@@ -12,7 +13,7 @@ using Timer = System.Timers.Timer;
 
 namespace SignCommands {
   //TODO: Add infinite signs support & Global cooldowns
-  [ApiVersion(1, 26)]
+  [ApiVersion(2, 0)]
   public class SignCommands : TerrariaPlugin {
     public override string Name => "Sign Commands";
     public override string Author => "Scavenger";
